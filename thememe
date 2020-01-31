@@ -1,3 +1,13 @@
-1 #!/usr/bin/env python
+#!/usr/bin/env python
 
-print 'hello world!'
+import argparse
+from image_colors import colors
+
+# Get image to pull colors from.
+parser = argparse.ArgumentParser()
+parser.add_argument('image_file_path',
+                    metavar='image_file_path',
+                    help='path to image file')
+image_file_path = parser.parse_args().image_file_path
+
+colors.generate(image_file_path)
