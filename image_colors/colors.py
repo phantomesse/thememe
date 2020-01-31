@@ -43,6 +43,55 @@ def __get_colors(image):
 # Generate complementary colors to existing buckets so that there are 7 buckets
 # in total.
 def __generate_color_buckets(existing_buckets):
+    buckets_to_generate_count = 7 - len(existing_buckets)
+    existing_buckets.sort(key=lambda bucket: len(bucket), reverse=True)
+    color_seeds = list(
+        map(
+            lambda bucket: bucket[0],
+            existing_buckets[0:min(len(existing_buckets
+                                       ), buckets_to_generate_count)]))
+
+    if buckets_to_generate_count < 4:
+        # Generate complementary colors.
+        # Select colors from the largest buckets to generate new buckets from.
+        for color in color_seeds:
+            new_hue = ((color.hue * 100 + 50) % 100) / 100
+            new_color = Color.fromHSL(new_hue, color.saturation,
+                                      color.luminosity)
+            existing_buckets.append([new_color])
+    else:
+        # Generate triadic colors.
+        new_colors = []
+        for color in color_seeds:
+            hues_to_generate_count = math.ceil(buckets_to_generate_count /
+                                               len(color_seeds))
+            for i in range(hues_to_generate_count):
+                new_hue = ((color.hue * 100 +
+                            (100 / (hues_to_generate_count + 1) *
+                             (i + 1))) % 100) / 100
+                new_color = Color.fromHSL(new_hue, color.saturation,
+                                          color.luminosity)
+                new_colors.append(new_color)
+
+        # Group all the colors together and split into buckets again.
+        colors = new_colors
+        for bucket in existing_buckets:
+            colors = colors + bucket
+
+        # Sort the colors into hue buckets.
+        buckets = [[colors[0]]]
+        colors.sort(key=lambda color: color.hue)
+        for color in colors[1:]:
+            if abs(buckets[-1][-1].hue - color.hue) < .06:
+                buckets[-1].append(color)
+            else:
+                buckets.append([color])
+
+        existing_buckets = buckets
+
+    existing_buckets.sort(key=lambda bucket: bucket[0].hue)
+    if len(existing_buckets) < 7:
+        existing_buckets = __generate_color_buckets(existing_buckets)
     return existing_buckets
 
 
@@ -53,43 +102,38 @@ def __get_surrounding_buckets_smallest_length(buckets, index):
 
 
 # Merge color buckets so that there are 7 buckets in total.
-def __merge_color_buckets(existing_buckets):
+def __merge_color_buckets(buckets):
     # Merge small buckets until we only have 7 buckets.
-    while len(existing_buckets) > 7:
+    while len(buckets) > 7:
         # Find the smallest bucket, prioritizing buckets with small buckets
         # around it.
         smallest_bucket_index = 0
-        for i in range(1, len(existing_buckets) - 1):
-            smallest_bucket_length = len(
-                existing_buckets[smallest_bucket_index])
-            if len(existing_buckets[i]) < smallest_bucket_length:
+        for i in range(1, len(buckets) - 1):
+            smallest_bucket_length = len(buckets[smallest_bucket_index])
+            if len(buckets[i]) < smallest_bucket_length:
                 smallest_bucket_index = i
             if len(
-                    existing_buckets[i]
+                    buckets[i]
             ) == smallest_bucket_length and __get_surrounding_buckets_smallest_length(
-                    existing_buckets,
-                    i) < __get_surrounding_buckets_smallest_length(
-                        existing_buckets, smallest_bucket_index):
+                    buckets, i) < __get_surrounding_buckets_smallest_length(
+                        buckets, smallest_bucket_index):
                 smallest_bucket_index = i
 
         # Merge with the smaller bucket on either side of this bucket.
         i = smallest_bucket_index
-        if i == 0 and i < len(existing_buckets) - 1:
-            existing_buckets[i +
-                             1] = existing_buckets[i + 1] + existing_buckets[i]
-            del existing_buckets[i]
-        elif i > 0 and i == len(existing_buckets) - 1:
-            existing_buckets[i -
-                             1] = existing_buckets[i - 1] + existing_buckets[i]
-            del existing_buckets[i]
-        elif i > 0 and i < len(existing_buckets) - 2:
-            smaller_bucket_index = i + 1 if len(existing_buckets[i + 1]) < len(
-                existing_buckets[i - 1]) else i - 1
-            existing_buckets[smaller_bucket_index] = existing_buckets[
-                smaller_bucket_index] + existing_buckets[i]
-            del existing_buckets[i]
-
-    return existing_buckets
+        if i == 0 and i < len(buckets) - 1:
+            buckets[i + 1] = buckets[i + 1] + buckets[i]
+            del buckets[i]
+        elif i > 0 and i == len(buckets) - 1:
+            buckets[i - 1] = buckets[i - 1] + buckets[i]
+            del buckets[i]
+        elif i > 0 and i < len(buckets) - 2:
+            smaller_bucket_index = i + 1 if len(buckets[i + 1]) < len(
+                buckets[i - 1]) else i - 1
+            buckets[smaller_bucket_index] = buckets[
+                smaller_bucket_index] + buckets[i]
+            del buckets[i]
+    return buckets
 
 
 def __create_similar_color(color):
@@ -156,7 +200,7 @@ def generate(image_file_path):
     # If we have 7 buckets, then we're all set. Otherwise, we need to generate
     # some colors.
     if len(buckets) < 7: buckets = __generate_color_buckets(buckets)
-    if len(bucket) > 7: buckets = __merge_color_buckets(buckets)
+    elif len(bucket) > 7: buckets = __merge_color_buckets(buckets)
 
     # Only keep two colors per bucket. If there is only one color in the bucket,
     # create a similar color in the bucket.
