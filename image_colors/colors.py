@@ -46,18 +46,55 @@ def __generate_color_buckets(existing_buckets):
     return existing_buckets
 
 
+def __get_surrounding_buckets_smallest_length(buckets, index):
+    if index == 0: return len(buckets[index + 1])
+    if index == len(buckets) - 1: return len(buckets[index - 1])
+    return min(len(buckets[index + 1]), len(buckets[index - 1]))
+
+
 # Merge color buckets so that there are 7 buckets in total.
 def __merge_color_buckets(existing_buckets):
     # Merge small buckets until we only have 7 buckets.
     while len(existing_buckets) > 7:
-        buckets = []
+        # Find the smallest bucket, prioritizing buckets with small buckets
+        # around it.
         smallest_bucket_index = 0
         for i in range(1, len(existing_buckets) - 1):
-            print(i)
-            if len(existing_buckets[i]) < len(
-                    existing_buckets[smallest_bucket_index]):
+            smallest_bucket_length = len(
+                existing_buckets[smallest_bucket_index])
+            if len(existing_buckets[i]) < smallest_bucket_length:
                 smallest_bucket_index = i
+            if len(
+                    existing_buckets[i]
+            ) == smallest_bucket_length and __get_surrounding_buckets_smallest_length(
+                    existing_buckets,
+                    i) < __get_surrounding_buckets_smallest_length(
+                        existing_buckets, smallest_bucket_index):
+                smallest_bucket_index = i
+
+        # Merge with the smaller bucket on either side of this bucket.
+        i = smallest_bucket_index
+        if i == 0 and i < len(existing_buckets) - 1:
+            existing_buckets[i +
+                             1] = existing_buckets[i + 1] + existing_buckets[i]
+            del existing_buckets[i]
+        elif i > 0 and i == len(existing_buckets) - 1:
+            existing_buckets[i -
+                             1] = existing_buckets[i - 1] + existing_buckets[i]
+            del existing_buckets[i]
+        elif i > 0 and i < len(existing_buckets) - 2:
+            smaller_bucket_index = i + 1 if len(existing_buckets[i + 1]) < len(
+                existing_buckets[i - 1]) else i - 1
+            existing_buckets[smaller_bucket_index] = existing_buckets[
+                smaller_bucket_index] + existing_buckets[i]
+            del existing_buckets[i]
+
     return existing_buckets
+
+
+def __create_similar_color(color):
+    return Color.fromHSL(color.hue, color.saturation,
+                         min(color.luminosity + .1, 1))
 
 
 # Generates 16 colors perfect for a terminal from a given image.
@@ -98,7 +135,7 @@ def generate(image_file_path):
     buckets = [[colors[0]]]
     colors.sort(key=lambda color: color.hue)
     for color in colors[1:]:
-        if abs(buckets[-1][-1].hue - color.hue) < .05:
+        if abs(buckets[-1][-1].hue - color.hue) < .06:
             buckets[-1].append(color)
         else:
             buckets.append([color])
@@ -120,6 +157,17 @@ def generate(image_file_path):
     # some colors.
     if len(buckets) < 7: buckets = __generate_color_buckets(buckets)
     if len(bucket) > 7: buckets = __merge_color_buckets(buckets)
+
+    # Only keep two colors per bucket. If there is only one color in the bucket,
+    # create a similar color in the bucket.
+    temp_buckets = []
+    for bucket in buckets:
+        bucket.sort(key=lambda color: color.luminosity)
+        if len(bucket) > 2: bucket = bucket[0:2]
+        if len(bucket) == 1:
+            bucket = [bucket[0], __create_similar_color(bucket[0])]
+        temp_buckets.append(bucket)
+    buckets = temp_buckets
 
     print('background color = %s\nforeground color = %s' %
           (bg_color.hexcode, fg_color.hexcode))
