@@ -3,4 +3,4 @@ build/
 dist/
 *.egg-info
 *.pyc
-test/*.md
+test/temp/
